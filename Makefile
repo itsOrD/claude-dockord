@@ -1,90 +1,48 @@
-.PHONY: build shell yolo ralph agents stop clean status logs login rc view-logs
+.PHONY: build login run shell task ralph agents auto attach monitor status logs export-logs teardown nuke
 
-# All volume names use this prefix (matches COMPOSE_PROJECT_NAME in claude-dockord CLI)
-COMPOSE_PROJECT_NAME := claude-dockord
-export COMPOSE_PROJECT_NAME
+APP := ./claude-dockord
 
-# ── Build & Auth ──────────────────────────────────────────────────
 build:
-	docker compose build
+	$(APP) setup
 
 login:
-	docker compose run --rm claude claude auth login
+	$(APP) setup
 
-# ── Interactive (requires P=path) ─────────────────────────────────
+run:
+	$(APP) run "$(P)"
+
 shell:
-	docker compose run --rm -v "$(P):/workspace" claude zsh
-
-yolo:
-	docker compose run --rm -v "$(P):/workspace" claude claude --dangerously-skip-permissions
+	$(APP) run "$(P)" --no-open
 
 task:
-	docker compose run --rm -v "$(P):/workspace" claude claude --dangerously-skip-permissions -p "$(T)"
-
-# ── Remote Control ────────────────────────────────────────────────
-rc:
-	@echo "Starting container. Once inside, type /rc for Remote Control."
-	@echo ""
-	docker compose run --rm -v "$(P):/workspace" claude claude --dangerously-skip-permissions
-
-# ── Ralph Loop ────────────────────────────────────────────────────
-ralph-install:
-	docker compose run --rm claude claude --dangerously-skip-permissions -p \
-		'/plugin install ralph-wiggum@claude-plugins-official'
+	$(APP) run "$(P)" --task "$(T)"
 
 ralph:
-	docker compose run --rm -v "$(P):/workspace" claude claude --dangerously-skip-permissions -p \
-		'/ralph-loop:ralph-loop "$(T)" --max-iterations 30'
+	$(APP) run "$(P)" --ralph "$(T)"
 
-# ── Auto-Restart ──────────────────────────────────────────────────
-auto:
-	docker compose run --rm -v "$(P):/workspace" claude bash /opt/templates/auto-restart.sh "$(T)"
-
-# ── Agent Teams ───────────────────────────────────────────────────
 agents:
-	docker compose run --rm -v "$(P):/workspace" claude claude --dangerously-skip-permissions
+	$(APP) run "$(P)" --agents "$(T)"
 
-agents-task:
-	docker compose run --rm -v "$(P):/workspace" claude claude --dangerously-skip-permissions -p "$(T)"
+auto:
+	$(APP) run "$(P)" --auto "$(T)"
 
 attach:
-	docker exec -it claude-dockord tmux attach 2>/dev/null || echo "No tmux session."
+	$(APP) attach
 
-# ── Monitoring ────────────────────────────────────────────────────
 monitor:
-	docker exec -it claude-dockord ccusage blocks --live
-
-usage:
-	docker exec -it claude-dockord ccusage daily --breakdown
-
-# ── Agent Logs ────────────────────────────────────────────────────
-view-logs:
-	@docker run --rm -v $(COMPOSE_PROJECT_NAME)_agent-logs:/logs alpine \
-		sh -c 'ls -la /logs/ 2>/dev/null || echo "No logs yet."'
-
-read-log:
-	@docker run --rm -v $(COMPOSE_PROJECT_NAME)_agent-logs:/logs alpine cat "/logs/$(F)"
-
-export-logs:
-	mkdir -p ./agent-logs-export
-	docker run --rm \
-		-v $(COMPOSE_PROJECT_NAME)_agent-logs:/src \
-		-v $(CURDIR)/agent-logs-export:/dst \
-		alpine cp -r /src/. /dst/
-	@echo "Logs exported to ./agent-logs-export/"
-
-# ── Container Management ─────────────────────────────────────────
-stop:
-	docker compose down
-
-clean:
-	docker compose down --rmi local
-
-nuke:
-	docker compose down -v --rmi local
+	$(APP) monitor
 
 status:
-	docker compose ps
+	$(APP) status
 
 logs:
-	docker compose logs -f
+	$(APP) logs
+
+export-logs:
+	$(APP) export-logs
+
+teardown:
+	$(APP) teardown
+
+nuke:
+	$(APP) nuke
