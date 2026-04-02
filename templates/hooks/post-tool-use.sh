@@ -3,11 +3,11 @@
 # Enforces git commit discipline and README awareness.
 # Outputs advisory messages (does not block).
 
-set -e
+set -euo pipefail
 
-INPUT=$(cat)
+INPUT="$(cat)"
 
-FILE=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)
+FILE="$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)"
 [ -z "$FILE" ] && exit 0
 
 git rev-parse --is-inside-work-tree &>/dev/null || exit 0
@@ -25,7 +25,7 @@ fi
 
 # ── README Awareness ──────────────────────────────────────────────
 case "$FILE" in
-    *.ts|*.tsx|*.js|*.jsx|*.py|*.go|*.rs|*.java|*.rb|*.swift|*.kt)
+    *.ts|*.tsx|*.js|*.jsx|*.py|*.go|*.rs|*.java|*.rb|*.swift|*.kt|*.sh)
         README_TOUCHED=$(( \
             $(git diff --name-only 2>/dev/null | grep -c 'README' || true) + \
             $(git diff --cached --name-only 2>/dev/null | grep -c 'README' || true) \

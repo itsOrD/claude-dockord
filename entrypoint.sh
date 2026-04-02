@@ -6,17 +6,27 @@ run_as_claude() {
     sudo -u claude -H "$@"
 }
 
+ensure_workspace_path_owner() {
+    local path="${1:?path is required}"
+    chown claude:claude "$path" >/dev/null 2>&1 || true
+}
+
 copy_template() {
     local relative_path="${1:?template path is required}"
     local source_path="/opt/templates/$relative_path"
     local destination_path="/workspace/$relative_path"
+    local destination_dir
 
     if [ ! -f "$source_path" ] || [ -f "$destination_path" ]; then
         return 0
     fi
 
-    mkdir -p "$(dirname "$destination_path")"
+    destination_dir="$(dirname "$destination_path")"
+    mkdir -p "$destination_dir"
+    ensure_workspace_path_owner "$destination_dir"
+
     cp "$source_path" "$destination_path"
+    ensure_workspace_path_owner "$destination_path"
     echo "[init] Copied $relative_path"
 
     if [ -d /workspace/.git ]; then
@@ -54,14 +64,22 @@ configure_hooks() {
     local settings_path="$claude_dir/settings.local.json"
 
     mkdir -p "$claude_dir/hooks"
+    ensure_workspace_path_owner "$claude_dir"
+    ensure_workspace_path_owner "$claude_dir/hooks"
 
     if [ ! -f "$claude_dir/hooks/post-tool-use.sh" ]; then
         cp /opt/templates/hooks/post-tool-use.sh "$claude_dir/hooks/post-tool-use.sh"
+        ensure_workspace_path_owner "$claude_dir/hooks/post-tool-use.sh"
         chmod +x "$claude_dir/hooks/post-tool-use.sh"
         echo "[init] Installed postToolUse hook"
     fi
 
     if [ -f "$settings_path" ]; then
+        if ! jq -e . "$settings_path" >/dev/null 2>&1; then
+            echo "[init] Skipping hook merge: $settings_path is not valid JSON"
+            return 0
+        fi
+
         if ! jq -e '.hooks.PostToolUse[]? | select(.command == ".claude/hooks/post-tool-use.sh")' \
             "$settings_path" >/dev/null 2>&1; then
             jq '
@@ -76,6 +94,7 @@ configure_hooks() {
                 )
             ' "$settings_path" > "$settings_path.tmp"
             mv "$settings_path.tmp" "$settings_path"
+            ensure_workspace_path_owner "$settings_path"
             echo "[init] Added postToolUse hook to settings.local.json"
         fi
         return 0
@@ -93,11 +112,35 @@ configure_hooks() {
   }
 }
 EOF
+    ensure_workspace_path_owner "$settings_path"
     echo "[init] Created settings.local.json with hooks"
 }
 
+remove_wildcard_safe_directory() {
+    local existing_entries
+
+    existing_entries="$(run_as_claude git config --global --get-all safe.directory 2>/dev/null || true)"
+    if printf '%s\n' "$existing_entries" | grep -qxF '*'; then
+        run_as_claude git config --global --unset-all safe.directory >/dev/null 2>&1 || true
+    fi
+}
+
+ensure_safe_directory() {
+    local path="${1:?path is required}"
+    local existing_entries
+
+    existing_entries="$(run_as_claude git config --global --get-all safe.directory 2>/dev/null || true)"
+    if printf '%s\n' "$existing_entries" | grep -qxF "$path"; then
+        return 0
+    fi
+
+    run_as_claude git config --global --add safe.directory "$path" >/dev/null 2>&1 || true
+}
+
 configure_git() {
-    run_as_claude git config --global --add safe.directory '*' >/dev/null 2>&1 || true
+    remove_wildcard_safe_directory
+    ensure_safe_directory "/workspace"
+    ensure_safe_directory "/worktrees"
     run_as_claude git config --global pull.rebase true >/dev/null 2>&1 || true
 
     if [ -z "$(run_as_claude git config --global user.name 2>/dev/null || true)" ]; then
@@ -133,23 +176,35 @@ KbdInteractiveAuthentication no
 ChallengeResponseAuthentication no
 UsePAM no
 PubkeyAuthentication yes
+AuthenticationMethods publickey
 AuthorizedKeysFile .ssh/authorized_keys
 PermitRootLogin no
+PermitEmptyPasswords no
+PermitUserEnvironment no
 AllowUsers claude
+AllowAgentForwarding no
 X11Forwarding no
+GatewayPorts no
 AllowTcpForwarding no
 PermitTunnel no
+UseDNS no
 PrintMotd no
 PidFile /var/run/sshd.pid
 Subsystem sftp internal-sftp
 EOF
 }
 
-ensure_onboarding_skip
-install_workspace_templates
-configure_hooks
-configure_git
-unlock_ssh_user
-configure_ssh
+main() {
+    ensure_onboarding_skip
+    install_workspace_templates
+    configure_hooks
+    configure_git
+    unlock_ssh_user
+    configure_ssh
 
-exec "$@"
+    exec "$@"
+}
+
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    main "$@"
+fi

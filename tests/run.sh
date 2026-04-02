@@ -19,5 +19,7 @@ bash "$ROOT_DIR/tests/session_test.sh"
 bash "$ROOT_DIR/tests/auth_test.sh"
 bash "$ROOT_DIR/tests/ui_test.sh"
 bash "$ROOT_DIR/tests/cli_test.sh"
+bash "$ROOT_DIR/tests/entrypoint_test.sh"
+bash "$ROOT_DIR/tests/hook_test.sh"
 
 echo "run.sh: PASS"
