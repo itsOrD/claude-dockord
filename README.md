@@ -2,9 +2,9 @@
 
 Persistent Docker orchestration for Claude Code. One command boots a production-style agent container on your machine, mounts your repo, wires in the Ralph loop and project templates, and leaves you with a stable SSH entrypoint for follow-up work.
 
-This repo is meant to showcase a disciplined Staff-level workflow:
+This repo is meant as a showcase workflow.  It is the 'ideal' version of what the author uses locally:
 
-- isolated container runtime instead of letting `--dangerously-skip-permissions` touch the host
+- isolated container runtime instead of letting `--dangerously-skip-permissions` touch the host (`auto-mode` not yet available to all users)
 - persistent tmux-backed sessions instead of disposable one-shot shells
 - Ralph-first autonomous execution when you provide a prompt
 - SSH-first handoff when you want the container to wait for manual direction
