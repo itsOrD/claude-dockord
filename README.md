@@ -27,7 +27,7 @@ This repo is meant to showcase a disciplined Staff-level workflow:
 ./claude-dockord run ~/code/my-app \
   --task "triage the failing integration tests" \
   --source "docs/spec.md" \
-  --source "https://internal.example.com/runbook"
+  --source "https://example.com/runbook"
 ```
 
 `run` now does the heavy lifting. It builds or refreshes the image, starts the long-lived container, mounts the target repo, ensures SSH access on `localhost`, launches a `tmux` session inside the container, and prints the exact SSH command you can reuse later.
