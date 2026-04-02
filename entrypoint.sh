@@ -38,16 +38,6 @@ ensure_onboarding_skip() {
     fi
 }
 
-ensure_oauth_fallback() {
-    if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && [ ! -f /home/claude/.claude/.credentials.json ]; then
-        install -d -m 700 -o claude -g claude /home/claude/.claude
-        umask 077
-        printf '{ "claudeAiOauth": { "accessToken": "%s" } }\n' "$CLAUDE_CODE_OAUTH_TOKEN" \
-            > /home/claude/.claude/.credentials.json
-        chown claude:claude /home/claude/.claude/.credentials.json
-    fi
-}
-
 install_workspace_templates() {
     copy_template "CLAUDE.md"
     copy_template ".ralphrc"
@@ -116,6 +106,11 @@ configure_git() {
     fi
 }
 
+unlock_ssh_user() {
+    # Debian locks newly created accounts by default, which blocks sshd before pubkey auth.
+    passwd -d claude >/dev/null 2>&1 || true
+}
+
 configure_ssh() {
     install -d -m 700 -o claude -g claude /home/claude/.ssh
 
@@ -128,7 +123,7 @@ configure_ssh() {
     ssh-keygen -A >/dev/null 2>&1
 
     cat > /etc/ssh/claude-dockord_sshd_config <<EOF
-Port ${SSH_PORT:-2222}
+Port 2222
 ListenAddress 0.0.0.0
 Protocol 2
 HostKey /etc/ssh/ssh_host_ed25519_key
@@ -151,10 +146,10 @@ EOF
 }
 
 ensure_onboarding_skip
-ensure_oauth_fallback
 install_workspace_templates
 configure_hooks
 configure_git
+unlock_ssh_user
 configure_ssh
 
 exec "$@"

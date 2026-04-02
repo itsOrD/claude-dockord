@@ -17,9 +17,7 @@ services:
       - claude-config:/home/claude/.claude
       - claude-history:/commandhistory
     environment:
-      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
       CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: 1
-      SSH_PORT: ${SSH_PORT:-2222}
       SSH_PUBLIC_KEY: ${SSH_PUBLIC_KEY:-}
 
 volumes:

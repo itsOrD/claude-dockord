@@ -2,3 +2,8 @@
 agent-logs-export/
 *.log
 .DS_Store
+.claude/
+.ralphrc
+progress.txt
+CLAUDE.md
+docs/

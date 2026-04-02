@@ -40,6 +40,9 @@ RUN echo 'export HISTFILE=/commandhistory/.zsh_history' >> /home/claude/.zshrc &
 RUN echo 'alias yolo="claude --dangerously-skip-permissions"' >> /home/claude/.zshrc && \
     echo 'alias cc="claude"' >> /home/claude/.zshrc && \
     echo 'export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1' >> /home/claude/.zshrc
+RUN echo 'if [ -d /workspace ] && [ "$PWD" = "$HOME" ]; then' >> /home/claude/.zshrc && \
+    echo '  cd /workspace' >> /home/claude/.zshrc && \
+    echo 'fi' >> /home/claude/.zshrc
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY scripts/launch-session.sh /usr/local/bin/claude-dockord-launch-session

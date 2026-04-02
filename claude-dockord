@@ -13,6 +13,8 @@ source "$SCRIPT_DIR/lib/ui.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/session.sh"
 # shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/auth.sh"
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/open-terminal.sh"
 
 RAM="16g"
@@ -69,6 +71,21 @@ print_connection_summary() {
     echo ""
 }
 
+maybe_authenticate_idle_session() {
+    if container_has_claude_auth; then
+        ok "Claude Max credentials already present"
+        return 0
+    fi
+
+    echo ""
+    if is_yes "$(read_with_default "Authenticate with Claude Max in your browser now? [Y/n]: " "Y")"; then
+        run_claude_subscription_auth
+        ok "Claude Max auth completed"
+    else
+        warn "Skipping Claude Max auth for now. SSH access still works; prompts that use Claude will require login later."
+    fi
+}
+
 maybe_open_terminal() {
     local ssh_port="${1:?ssh port is required}"
     local open_terminal="${2:?open terminal flag is required}"
@@ -96,13 +113,13 @@ ensure_auth_if_needed() {
     fi
 
     if container_has_claude_auth; then
-        ok "Claude credentials already present"
+        ok "Claude Max credentials already present"
         return 0
     fi
 
-    info "Claude auth is required before the initial task can start."
-    container_tty_shell_as_claude "claude auth login"
-    ok "Claude auth completed"
+    info "Claude Max login is required before the initial task can start."
+    run_claude_subscription_auth
+    ok "Claude Max auth completed"
 }
 
 ensure_ralph_if_needed() {
@@ -292,10 +309,10 @@ cmd_setup() {
 
     step "5/6" "Authenticating Claude..."
     if container_has_claude_auth; then
-        ok "Claude credentials already present"
+        ok "Claude Max credentials already present"
     else
-        container_tty_shell_as_claude "claude auth login"
-        ok "Claude auth completed"
+        run_claude_subscription_auth
+        ok "Claude Max auth completed"
     fi
     echo ""
 
@@ -344,6 +361,10 @@ cmd_run() {
     fi
 
     start_or_refresh_container "$PROJECT_PATH" "$MODE" "$initial_request" "$ssh_port"
+
+    if [ "$interactive_mode" = "true" ] && [ "$MODE" = "idle" ]; then
+        maybe_authenticate_idle_session
+    fi
 
     if [ "$SHOW_RC_HINT" -eq 1 ]; then
         info "After connecting, run /rc inside the container to enable Remote Control."
