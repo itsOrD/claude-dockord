@@ -35,6 +35,18 @@ flow through the encrypted bridge.
 Constraints: one session at a time, terminal must stay open, ~10 min network
 timeout disconnects the session.
 
+## Host Access
+
+This container is meant to stay up between sessions.
+
+- SSH in from the host with the command printed by `claude-dockord run`
+- Default tmux session name: `dockord`
+- Reattach after SSH with:
+
+```bash
+tmux attach -t dockord || zsh -l
+```
+
 ## Monitoring
 
 Token usage monitoring via ccusage (pre-installed):
