@@ -152,6 +152,7 @@ This flow is built around Claude Code’s web-based `claude auth login --claudea
 - SSH binds to `127.0.0.1` only.
 - Password auth and root SSH login are disabled.
 - Only the generated local public key is authorized by default.
+- Git trust is scoped to `/workspace` and `/worktrees` inside the container (no global `safe.directory=*`).
 - The CLI now rejects path traversal when reading exported log files.
 - Hook configuration is merged without overwriting unrelated `settings.local.json` hook data.
 
@@ -215,9 +216,13 @@ This is still an intentionally permissive agent container. Claude runs with `--d
 │   └── hooks/
 └── tests/
     ├── auth_test.sh
+    ├── cli_test.sh
+    ├── entrypoint_test.sh
     ├── helpers.sh
+    ├── hook_test.sh
     ├── run.sh
-    └── session_test.sh
+    ├── session_test.sh
+    └── ui_test.sh
 ```
 
 ## Verification
@@ -234,9 +239,12 @@ Those cover:
 - Claude Max auth delegation to Claude Code's own login flow
 - prompt construction
 - SSH command generation
+- run-flag validation (missing values, conflicting modes, invalid `--ssh-port`, invalid `--ralph-iter`)
 - session-state persistence
 - log filename sanitization
 - SSH port selection behavior
+- container git trust hardening for `safe.directory`
+- post-tool hook README reminders for shell source changes
 
 ## Requirements
 
