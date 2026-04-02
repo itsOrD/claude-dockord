@@ -1,0 +1,28 @@
+$ ./claude-dockord run . --ssh-port 2301 --no-open
+
+[1/4] Preparing local SSH access...
+✓ SSH key ready at ~/.claude-dockord/id_ed25519
+
+[2/4] Building and starting the persistent container...
+✓ Container is running on localhost:2301
+
+[3/4] Checking Claude prerequisites...
+
+[4/4] Launching the dockord tmux session...
+✓ tmux session 'dockord' is ready
+
+▸ Authenticate with Claude Max in your browser now? [Y/n]: n
+⚠ Skipping Claude Max auth for now. SSH access still works.
+
+✓ Container ready.
+
+Project:   /path/to/project
+Mode:      idle
+SSH Port:  2301
+
+Connect:
+ssh -i ~/.claude-dockord/id_ed25519 ... -p 2301 claude@127.0.0.1
+
+Attach tmux:
+ssh -i ~/.claude-dockord/id_ed25519 ... -p 2301 claude@127.0.0.1 \
+  -t 'tmux attach -t dockord || exec zsh -l'

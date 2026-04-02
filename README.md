@@ -8,12 +8,13 @@ This repo is meant to showcase a disciplined Staff-level workflow:
 - persistent tmux-backed sessions instead of disposable one-shot shells
 - Ralph-first autonomous execution when you provide a prompt
 - SSH-first handoff when you want the container to wait for manual direction
+- browser-based Claude Max authentication instead of API-style usage
 - explicit git hygiene, logging, tests, and docs around the automation itself
 
 ## Quick Start
 
 ```bash
-# Optional first-time setup: build image, start container, authenticate Claude
+# Optional first-time setup: build image, start container, authenticate Claude Max
 ./claude-dockord setup
 
 # Boot a project container. Leave the prompt blank to start idle and SSH in later.
@@ -33,6 +34,32 @@ This repo is meant to showcase a disciplined Staff-level workflow:
 
 If you provide an initial prompt, the work starts immediately in `tmux`. If you leave it blank, the container idles and waits for you to connect over SSH and give instructions manually.
 
+If Claude Max credentials are missing, dockord hands control to `claude auth login --claudeai` inside the container. You complete the browser-based flow and, if Claude Code asks for it, paste the returned authentication code back into the interactive CLI. It does not rely on API keys or Anthropic API billing.
+
+## Proof
+
+The repo includes generated proof assets from a verified local run of the current flow.
+
+![Dockord proof flow](proofs/dockord-proof.gif)
+
+Idle boot and SSH handoff:
+
+![Idle container boot](proofs/idle-flow.png)
+
+Manual Claude Max login flow:
+
+![Claude Max login flow](proofs/oauth-browser-launch.png)
+
+Interactive SSH re-entry into the mounted workspace:
+
+![SSH workspace reentry](proofs/ssh-workspace.png)
+
+Regenerate the media locally with:
+
+```bash
+bash ./scripts/render-proof-media.sh
+```
+
 ## Interactive Flow
 
 `./claude-dockord run <path>` opens an interactive flow with three decisions:
@@ -48,6 +75,8 @@ If you skip the prompt, dockord boots an idle container and prints:
 - an optional “open a new terminal and connect now” action on supported hosts
 
 On macOS this uses `Terminal.app` via AppleScript. On Linux it falls back to `x-terminal-emulator`, `gnome-terminal`, or `konsole` when available.
+
+When Claude Max auth is needed, the CLI pauses in Claude Code's own login flow. The container stays on the `claude` user, the browser opens from that flow, and you can paste the one-time auth code back into the terminal if Claude prompts for it.
 
 ## What It Does
 
@@ -83,6 +112,10 @@ Immediate Claude/Ralph work runs in a named `tmux` session. That lets the contai
 **Ralph stays central**
 
 If you provide a prompt interactively, Ralph is the default launch mode. Fire-and-forget, agent kickoff, and auto-restart are still available, but the autonomous Ralph loop remains the first-class path.
+
+**Claude Max, not API keys**
+
+This flow is built around Claude Code’s web-based `claude auth login --claudeai` path so the container can use your Claude Max plan. There is no `.env` API-key setup in the product flow.
 
 ## CLI Reference
 
@@ -160,11 +193,19 @@ This is still an intentionally permissive agent container. Claude runs with `--d
 ├── entrypoint.sh
 ├── Makefile
 ├── lib/
+│   ├── auth.sh
 │   ├── open-terminal.sh
 │   ├── session.sh
 │   └── ui.sh
+├── proofs/
+│   ├── dockord-proof.gif
+│   ├── idle-flow.png
+│   ├── oauth-browser-launch.png
+│   ├── ssh-workspace.png
+│   └── transcripts/
 ├── scripts/
-│   └── launch-session.sh
+│   ├── launch-session.sh
+│   └── render-proof-media.sh
 ├── templates/
 │   ├── CLAUDE.md
 │   ├── .ralphrc
@@ -173,6 +214,7 @@ This is still an intentionally permissive agent container. Claude runs with `--d
 │   ├── docs/
 │   └── hooks/
 └── tests/
+    ├── auth_test.sh
     ├── helpers.sh
     ├── run.sh
     └── session_test.sh
@@ -189,6 +231,7 @@ The repo now includes shell-level regression tests:
 Those cover:
 
 - shell syntax across the host and container scripts
+- Claude Max auth delegation to Claude Code's own login flow
 - prompt construction
 - SSH command generation
 - session-state persistence
@@ -199,7 +242,7 @@ Those cover:
 
 - Docker Desktop or another working Docker daemon
 - Claude Code CLI access (`@anthropic-ai/claude-code` is installed in the image)
-- Claude authentication via `claude auth login` or `CLAUDE_CODE_OAUTH_TOKEN`
+- Claude Max authentication via browser-based `claude auth login`
 
 ## License
 

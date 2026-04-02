@@ -1,0 +1,12 @@
+$ ./claude-dockord setup
+
+Claude Max login runs as the non-root 'claude' user inside the container.
+Complete the browser flow and paste the returned authentication code
+back into Claude Code when prompted.
+
+Opening browser to sign in…
+If the browser didn't open, visit:
+https://claude.com/cai/oauth/authorize?...[redacted-session-query]
+
+Paste code here if prompted > [redacted-auth-code]
+Authentication continues inside the container as the claude user.

@@ -1,0 +1,12 @@
+$ ssh -i ~/.claude-dockord/id_ed25519 -p 2301 claude@127.0.0.1
+% pwd
+/workspace
+% tmux display-message -p -t dockord "#{session_name}:#{session_windows}:#{session_attached}"
+dockord:1:0
+% test -f CLAUDE.md && echo CLAUDE_MD_OK
+CLAUDE_MD_OK
+% test -f .ralphrc && echo RALPHRC_OK
+RALPHRC_OK
+% test -f progress.txt && echo PROGRESS_OK
+PROGRESS_OK
+% exit
