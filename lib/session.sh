@@ -85,10 +85,29 @@ port_is_in_use() {
     return 1
 }
 
+is_valid_port_number() {
+    local port="${1:-}"
+
+    if ! [[ "$port" =~ ^[0-9]+$ ]]; then
+        return 1
+    fi
+
+    if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+        return 1
+    fi
+
+    return 0
+}
+
 pick_ssh_port() {
     local requested_port="${1-}"
     local candidate="${requested_port:-$DEFAULT_SSH_PORT}"
     local attempts=0
+
+    if ! is_valid_port_number "$candidate"; then
+        echo "Invalid SSH port '${candidate}'. Choose a port between 1 and 65535." >&2
+        return 1
+    fi
 
     while port_is_in_use "$candidate"; do
         attempts=$((attempts + 1))
@@ -96,7 +115,12 @@ pick_ssh_port() {
             echo "Unable to find a free SSH port near ${requested_port:-$DEFAULT_SSH_PORT}." >&2
             return 1
         fi
+
         candidate=$((candidate + 1))
+        if [ "$candidate" -gt 65535 ]; then
+            echo "Unable to find a free SSH port: exceeded 65535 while searching from ${requested_port:-$DEFAULT_SSH_PORT}." >&2
+            return 1
+        fi
     done
 
     printf '%s' "$candidate"
@@ -276,7 +300,7 @@ sanitize_log_filename() {
     local file_name="${1:-}"
 
     case "$file_name" in
-        ""|*/*|*..*)
+        ""|*/*|*..*|*[$'\n\r\t']*|-*)
             return 1
             ;;
         *)

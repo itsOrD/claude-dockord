@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 APP_NAME="claude-dockord"
@@ -37,6 +37,61 @@ mode_requires_auth() {
         task|ralph|agents|auto) return 0 ;;
         *) return 1 ;;
     esac
+}
+
+require_flag_value() {
+    local option="${1:?option is required}"
+    local value="${2-}"
+
+    if [ -z "${value:-}" ] || [[ "$value" == --* ]]; then
+        fail "Option $option requires a value."
+        exit 1
+    fi
+}
+
+set_mode_from_flag() {
+    local new_mode="${1:?mode is required}"
+
+    if [ -n "$MODE" ] && [ "$MODE" != "$new_mode" ]; then
+        fail "Conflicting run mode options were provided. Use only one of: --task, --ralph, --agents, --auto."
+        exit 1
+    fi
+
+    MODE="$new_mode"
+}
+
+validate_positive_integer_option() {
+    local option="${1:?option is required}"
+    local value="${2:-}"
+
+    if ! [[ "$value" =~ ^[0-9]+$ ]] || [ "$value" -le 0 ]; then
+        fail "Option $option must be a positive integer (received: '$value')."
+        exit 1
+    fi
+}
+
+validate_ssh_port_option() {
+    local value="${1:?port value is required}"
+
+    validate_positive_integer_option "--ssh-port" "$value"
+    if [ "$value" -gt 65535 ]; then
+        fail "Option --ssh-port must be between 1 and 65535 (received: '$value')."
+        exit 1
+    fi
+}
+
+require_docker_daemon() {
+    if ! docker_daemon_available; then
+        fail "Cannot connect to the Docker daemon."
+        exit 1
+    fi
+}
+
+require_running_container() {
+    if ! container_is_running; then
+        fail "Container not running. Start a session first."
+        exit 1
+    fi
 }
 
 print_connection_summary() {
@@ -211,38 +266,48 @@ parse_run_flags() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --ram)
+                require_flag_value "$1" "${2-}"
                 RAM="$2"
                 shift 2
                 ;;
             --task)
-                MODE="task"
+                require_flag_value "$1" "${2-}"
+                set_mode_from_flag "task"
                 TASK="$2"
                 shift 2
                 ;;
             --ralph)
-                MODE="ralph"
+                require_flag_value "$1" "${2-}"
+                set_mode_from_flag "ralph"
                 TASK="$2"
                 shift 2
                 ;;
             --ralph-iter)
+                require_flag_value "$1" "${2-}"
+                validate_positive_integer_option "--ralph-iter" "$2"
                 MAX_ITER="$2"
                 shift 2
                 ;;
             --agents)
-                MODE="agents"
+                require_flag_value "$1" "${2-}"
+                set_mode_from_flag "agents"
                 TASK="$2"
                 shift 2
                 ;;
             --auto)
-                MODE="auto"
+                require_flag_value "$1" "${2-}"
+                set_mode_from_flag "auto"
                 TASK="$2"
                 shift 2
                 ;;
             --source)
+                require_flag_value "$1" "${2-}"
                 append_source "$2"
                 shift 2
                 ;;
             --ssh-port)
+                require_flag_value "$1" "${2-}"
+                validate_ssh_port_option "$2"
                 REQUESTED_SSH_PORT="$2"
                 shift 2
                 ;;
@@ -353,6 +418,8 @@ cmd_run() {
         MODE="idle"
     fi
 
+    validate_positive_integer_option "--ralph-iter" "$MAX_ITER"
+
     ensure_host_dependencies
     ssh_port="$(pick_ssh_port "$REQUESTED_SSH_PORT")"
 
@@ -378,24 +445,14 @@ cmd_run() {
 }
 
 cmd_monitor() {
-    docker_daemon_available || {
-        fail "Cannot connect to the Docker daemon."
-        exit 1
-    }
-
-    if ! container_is_running; then
-        fail "Container not running. Start a session first."
-        exit 1
-    fi
+    require_docker_daemon
+    require_running_container
 
     docker exec -it --user claude "$CONTAINER_NAME" ccusage blocks --live
 }
 
 cmd_logs() {
-    docker_daemon_available || {
-        fail "Cannot connect to the Docker daemon."
-        exit 1
-    }
+    require_docker_daemon
 
     docker run --rm -v "${COMPOSE_PROJECT_NAME}_agent-logs:/logs" alpine \
         sh -c 'ls -la /logs/ 2>/dev/null || echo "No logs yet."'
@@ -404,24 +461,21 @@ cmd_logs() {
 cmd_log() {
     local safe_name
 
-    docker_daemon_available || {
-        fail "Cannot connect to the Docker daemon."
-        exit 1
-    }
+    require_docker_daemon
 
     safe_name="$(sanitize_log_filename "${1:?Usage: claude-dockord log <filename>}")" || {
         fail "Log filename must be a single basename."
         exit 1
     }
 
-    docker run --rm -v "${COMPOSE_PROJECT_NAME}_agent-logs:/logs" alpine cat "/logs/$safe_name"
+    docker run --rm \
+        -v "${COMPOSE_PROJECT_NAME}_agent-logs:/logs" \
+        -e LOG_FILE="$safe_name" \
+        alpine sh -c 'if [ -f "/logs/$LOG_FILE" ]; then cat "/logs/$LOG_FILE"; else echo "Log file not found: $LOG_FILE" >&2; exit 1; fi'
 }
 
 cmd_export_logs() {
-    docker_daemon_available || {
-        fail "Cannot connect to the Docker daemon."
-        exit 1
-    }
+    require_docker_daemon
 
     mkdir -p ./agent-logs-export
     docker run --rm \
@@ -432,10 +486,7 @@ cmd_export_logs() {
 }
 
 cmd_status() {
-    docker_daemon_available || {
-        fail "Cannot connect to the Docker daemon."
-        exit 1
-    }
+    require_docker_daemon
 
     docker compose ps
 
@@ -447,35 +498,22 @@ cmd_status() {
 }
 
 cmd_attach() {
-    docker_daemon_available || {
-        fail "Cannot connect to the Docker daemon."
-        exit 1
-    }
-
-    if ! container_is_running; then
-        fail "Container not running. Start a session first."
-        exit 1
-    fi
+    require_docker_daemon
+    require_running_container
 
     docker exec -it --user claude --workdir /workspace -e HOME=/home/claude "$CONTAINER_NAME" \
         bash -lc "tmux attach -t '$SESSION_NAME' || exec zsh -l"
 }
 
 cmd_teardown() {
-    docker_daemon_available || {
-        fail "Cannot connect to the Docker daemon."
-        exit 1
-    }
+    require_docker_daemon
 
     docker compose down
     rm -f "$SESSION_STATE_PATH"
 }
 
 cmd_nuke() {
-    docker_daemon_available || {
-        fail "Cannot connect to the Docker daemon."
-        exit 1
-    }
+    require_docker_daemon
 
     docker compose down -v --rmi local
     rm -f "$SESSION_STATE_PATH"

@@ -49,11 +49,31 @@ assert_contains "$ATTACH_CMD" "tmux attach -t dockord" "Attach command should ju
     assert_equals "3001" "$NEXT_PORT" "pick_ssh_port should advance to the next free port"
 )
 
+if pick_ssh_port "abc" >/dev/null 2>&1; then
+    echo "ASSERTION FAILED: Non-numeric SSH ports should be rejected" >&2
+    exit 1
+fi
+
+if pick_ssh_port "70000" >/dev/null 2>&1; then
+    echo "ASSERTION FAILED: SSH ports above 65535 should be rejected" >&2
+    exit 1
+fi
+
 save_session_state "/tmp/project" "2233" "24g" "ralph"
 load_session_state
 assert_equals "/tmp/project" "$PROJECT_PATH" "Saved session state should restore the project path"
 assert_equals "2233" "$SSH_PORT" "Saved session state should restore the SSH port"
 assert_equals "24g" "$RAM" "Saved session state should restore RAM"
 assert_equals "ralph" "$MODE" "Saved session state should restore mode"
+
+if sanitize_log_filename $'activity\nlog.md' >/dev/null 2>&1; then
+    echo "ASSERTION FAILED: Newlines should be rejected for log filenames" >&2
+    exit 1
+fi
+
+if sanitize_log_filename "-activity.md" >/dev/null 2>&1; then
+    echo "ASSERTION FAILED: Leading dashes should be rejected for log filenames" >&2
+    exit 1
+fi
 
 echo "session_test.sh: PASS"

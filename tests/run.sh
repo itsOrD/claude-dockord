@@ -15,8 +15,9 @@ bash -n \
     "$ROOT_DIR/templates/auto-restart.sh" \
     "$ROOT_DIR/templates/hooks/post-tool-use.sh"
 
-"$ROOT_DIR/tests/session_test.sh"
+bash "$ROOT_DIR/tests/session_test.sh"
 bash "$ROOT_DIR/tests/auth_test.sh"
-"$ROOT_DIR/tests/ui_test.sh"
+bash "$ROOT_DIR/tests/ui_test.sh"
+bash "$ROOT_DIR/tests/cli_test.sh"
 
 echo "run.sh: PASS"
