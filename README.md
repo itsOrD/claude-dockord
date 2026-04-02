@@ -155,31 +155,10 @@ This flow is built around Claude Code’s web-based `claude auth login --claudea
 - Git trust is scoped to `/workspace` and `/worktrees` inside the container (no global `safe.directory=*`).
 - The CLI now rejects path traversal when reading exported log files.
 - Hook configuration is merged without overwriting unrelated `settings.local.json` hook data.
+- GitHub CI checks run from `.github/workflows/ci.yml`.
+- Dependabot updates run from `.github/dependabot.yml`, with alerts/security updates enabled in repository settings.
 
 This is still an intentionally permissive agent container. Claude runs with `--dangerously-skip-permissions`, and the `claude` user keeps passwordless `sudo` inside the container. The point is to constrain that risk to the mounted project and named Docker volumes, not to pretend the runtime is sandboxed internally.
-
-## GitHub Security Setup
-
-This repository is configured for GitHub-side security automation with:
-
-- CI checks in `.github/workflows/ci.yml`
-- Dependabot updates in `.github/dependabot.yml`
-- Secret scanning and Dependabot alerts/security updates enabled in repository settings
-
-To require passing CI before merges:
-
-1. Open `Settings` -> `Branches` -> `Add rule`.
-2. Set `Branch name pattern` to `main`.
-3. Enable `Require a pull request before merging`.
-4. Enable `Require status checks to pass before merging`.
-5. Select the `CI / Shell Test Suite` check.
-6. Save the rule.
-
-How to verify these are working:
-
-1. Open `Actions` and confirm the latest `CI` run on `main` is green.
-2. Open `Security` -> `Dependabot alerts` and confirm the feature is enabled.
-3. Open `Security` -> `Secret scanning` and confirm alerts/push protection are enabled.
 
 ## Architecture
 
