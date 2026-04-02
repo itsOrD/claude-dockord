@@ -1,0 +1,4 @@
+.env
+agent-logs-export/
+*.log
+.DS_Store

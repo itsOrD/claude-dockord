@@ -1,0 +1,306 @@
+#!/bin/bash
+# claude-dockord — Autonomous multi-agent development in Docker
+# https://github.com/claude-dockord/claude-dockord
+
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
+export COMPOSE_PROJECT_NAME="claude-dockord"
+
+RAM="16g"
+
+# ── Formatting ────────────────────────────────────────────────────
+B='\033[1m'       # bold
+D='\033[2m'       # dim
+C='\033[0;36m'    # cyan
+G='\033[0;32m'    # green
+Y='\033[0;33m'    # yellow
+R='\033[0;31m'    # red
+N='\033[0m'       # reset
+
+banner() {
+    echo ""
+    echo -e "${B}┌──────────────────────────────────────────────┐${N}"
+    echo -e "${B}│${C}    ╔═╗╦  ╔═╗╦ ╦╔╦╗╔═╗                       ${B}│${N}"
+    echo -e "${B}│${C}    ║  ║  ╠═╣║ ║ ║║║╣    ${D}dockord${C}              ${B}│${N}"
+    echo -e "${B}│${C}    ╚═╝╩═╝╩ ╩╚═╝═╩╝╚═╝                       ${B}│${N}"
+    echo -e "${B}│${D}    Autonomous multi-agent dev in Docker       ${B}│${N}"
+    echo -e "${B}└──────────────────────────────────────────────┘${N}"
+    echo ""
+}
+
+step()    { echo -e "  ${B}[$1]${N} $2"; }
+ok()      { echo -e "       ${G}✓ $1${N}"; }
+info()    { echo -e "       ${D}$1${N}"; }
+warn()    { echo -e "       ${Y}⚠ $1${N}"; }
+fail()    { echo -e "       ${R}✗ $1${N}"; }
+prompt()  { echo -ne "  ${B}▸${N} $1"; }
+divider() { echo -e "  ${D}────────────────────────────────────────${N}"; }
+
+# ── Usage ─────────────────────────────────────────────────────────
+usage() {
+    banner
+    cat <<'EOF'
+  COMMANDS
+    setup                       Build, authenticate, install plugins
+    run <path> [options]        Launch a session against a project
+    monitor                     Live token/session usage dashboard
+    logs                        List agent activity logs
+    log <filename>              Read a specific agent log
+    export-logs                 Copy all logs to ./agent-logs-export/
+    status                      Show running containers
+    attach                      Attach to tmux (watch agent teams)
+    teardown                    Stop containers, keep volumes
+    nuke                        Remove everything including volumes
+
+  RUN OPTIONS (or omit for interactive mode)
+    --ram <size>                Container memory limit (default: 16g)
+    --task <prompt>             Fire-and-forget task
+    --ralph <prompt>            Ralph loop with auto-iteration
+    --ralph-iter <n>            Max ralph iterations (default: 30)
+    --agents <prompt>           Multi-agent with team coordination
+    --auto <prompt>             Auto-restart on rate limits
+    --rc                        Start with Remote Control hint
+
+  EXAMPLES
+    claude-dockord setup
+    claude-dockord run ~/code/my-app
+    claude-dockord run ~/code/my-app --ralph "implement JWT auth"
+    claude-dockord monitor
+
+EOF
+}
+
+# ── Setup ─────────────────────────────────────────────────────────
+cmd_setup() {
+    banner
+
+    local STEPS=4
+    echo -e "  ${D}Setting up claude-dockord. This takes 3-5 minutes.${N}"
+    echo ""
+
+    # 1. Build
+    step "1/$STEPS" "Building container image..."
+    info "This installs Node 20, Claude Code, ccusage, tmux, and tools."
+    echo ""
+    docker compose build
+    echo ""
+    ok "Image built"
+    echo ""
+
+    # 2. Auth
+    step "2/$STEPS" "Authenticating with Claude..."
+    info "A browser window will open. Log in with your Max account."
+    info "Credentials are stored in a Docker volume and persist across rebuilds."
+    echo ""
+    docker compose run --rm claude claude auth login
+    echo ""
+    ok "Authenticated"
+    echo ""
+
+    # 3. Ralph plugin
+    step "3/$STEPS" "Installing ralph-wiggum plugin..."
+    info "Ralph enables autonomous iteration loops with circuit breakers."
+    echo ""
+    docker compose run --rm claude claude --dangerously-skip-permissions -p \
+        '/plugin install ralph-wiggum@claude-plugins-official' \
+        2>/dev/null && ok "Ralph plugin installed" \
+        || warn "Auto-install may not have completed. Run this in your first session:
+         /plugin install ralph-wiggum@claude-plugins-official"
+    echo ""
+
+    # 4. Done
+    step "4/$STEPS" "Verifying installation..."
+    docker compose run --rm claude claude --version 2>/dev/null && ok "Claude Code is working" || fail "Could not verify"
+    echo ""
+
+    divider
+    echo ""
+    ok "Setup complete!"
+    echo ""
+    echo -e "  ${B}Next:${N} claude-dockord run ~/code/your-project"
+    echo ""
+}
+
+# ── Run ───────────────────────────────────────────────────────────
+cmd_run() {
+    local PROJECT_PATH="${1:-}"
+    local MODE="" TASK="" MAX_ITER=30
+
+    # If no path given, ask for it
+    if [ -z "$PROJECT_PATH" ]; then
+        banner
+        prompt "Project path: "
+        read -r PROJECT_PATH
+        [ -z "$PROJECT_PATH" ] && echo "No path provided." && exit 1
+    else
+        shift || true
+    fi
+
+    # Validate
+    PROJECT_PATH="${PROJECT_PATH/#\~/$HOME}"
+    if [ ! -d "$PROJECT_PATH" ]; then
+        fail "$PROJECT_PATH is not a directory."
+        exit 1
+    fi
+    PROJECT_PATH="$(cd "$PROJECT_PATH" && pwd)"
+
+    # Parse flags (if provided, skip interactive)
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --ram)        RAM="$2"; shift 2 ;;
+            --task)       MODE="task"; TASK="$2"; shift 2 ;;
+            --ralph)      MODE="ralph"; TASK="$2"; shift 2 ;;
+            --ralph-iter) MAX_ITER="$2"; shift 2 ;;
+            --agents)     MODE="agents"; TASK="$2"; shift 2 ;;
+            --auto)       MODE="auto"; TASK="$2"; shift 2 ;;
+            --rc)         MODE="rc"; shift ;;
+            *) echo "Unknown option: $1"; exit 1 ;;
+        esac
+    done
+
+    # Interactive mode if no flags given
+    if [ -z "$MODE" ]; then
+        banner
+        echo -e "  ${B}Project:${N} $PROJECT_PATH"
+        echo ""
+        divider
+        echo ""
+        echo -e "  ${B}How should the agents work?${N}"
+        echo ""
+        echo "    1) Interactive YOLO session (you steer)"
+        echo "    2) Ralph loop (autonomous until done)"
+        echo "    3) Agent team (parallel multi-agent)"
+        echo "    4) Fire-and-forget (single prompt, exits when done)"
+        echo "    5) Auto-restart (handles rate limits automatically)"
+        echo ""
+        prompt "Choice [1]: "
+        read -r CHOICE
+        CHOICE="${CHOICE:-1}"
+
+        case "$CHOICE" in
+            1) MODE="yolo" ;;
+            2) MODE="ralph" ;;
+            3) MODE="agents" ;;
+            4) MODE="task" ;;
+            5) MODE="auto" ;;
+            *) echo "Invalid choice."; exit 1 ;;
+        esac
+
+        if [ "$MODE" != "yolo" ]; then
+            echo ""
+            prompt "Describe the task: "
+            read -r TASK
+            [ -z "$TASK" ] && echo "No task provided." && exit 1
+        fi
+
+        if [ "$MODE" = "ralph" ]; then
+            prompt "Max iterations [30]: "
+            read -r ITER_INPUT
+            MAX_ITER="${ITER_INPUT:-30}"
+        fi
+
+        echo ""
+        prompt "RAM allocation [${RAM}]: "
+        read -r RAM_INPUT
+        RAM="${RAM_INPUT:-$RAM}"
+    fi
+
+    export MEMORY_LIMIT="$RAM"
+
+    # Launch summary
+    echo ""
+    divider
+    echo ""
+    echo -e "  ${B}Launching${N}"
+    echo -e "    Project:    ${C}$PROJECT_PATH${N}"
+    echo -e "    Mode:       ${C}$MODE${N}"
+    echo -e "    RAM:        ${C}$RAM${N}"
+    [ -n "$TASK" ] && echo -e "    Task:       ${C}${TASK:0:60}${N}"
+    echo ""
+    divider
+    echo ""
+
+    case "$MODE" in
+        yolo)
+            docker compose run --rm -v "$PROJECT_PATH:/workspace" \
+                claude claude --dangerously-skip-permissions
+            ;;
+        task)
+            docker compose run --rm -v "$PROJECT_PATH:/workspace" \
+                claude claude --dangerously-skip-permissions -p "$TASK"
+            ;;
+        ralph)
+            docker compose run --rm -v "$PROJECT_PATH:/workspace" \
+                claude claude --dangerously-skip-permissions -p \
+                "/ralph-loop:ralph-loop \"$TASK\" --max-iterations $MAX_ITER"
+            ;;
+        agents)
+            docker compose run --rm -v "$PROJECT_PATH:/workspace" \
+                claude claude --dangerously-skip-permissions -p "$TASK"
+            ;;
+        auto)
+            docker compose run --rm -v "$PROJECT_PATH:/workspace" \
+                claude bash /opt/templates/auto-restart.sh "$TASK"
+            ;;
+        rc)
+            info "Once inside, type /rc to enable Remote Control."
+            echo ""
+            docker compose run --rm -v "$PROJECT_PATH:/workspace" \
+                claude claude --dangerously-skip-permissions
+            ;;
+    esac
+
+    # Post-run
+    echo ""
+    divider
+    echo ""
+    ok "Session ended."
+    echo ""
+    echo -e "  ${B}Review:${N}"
+    echo "    claude-dockord logs          # agent activity"
+    echo "    claude-dockord export-logs   # copy logs to host"
+    echo ""
+}
+
+# ── Monitoring & Logs ─────────────────────────────────────────────
+cmd_monitor() {
+    echo -e "${B}Live token usage${N} ${D}(Ctrl+C to exit)${N}"
+    docker exec -it claude-dockord ccusage blocks --live 2>/dev/null || \
+        echo "Container not running. Start a session first."
+}
+
+cmd_logs() {
+    docker run --rm -v claude-dockord_agent-logs:/logs alpine \
+        sh -c 'ls -la /logs/ 2>/dev/null || echo "No logs yet."'
+}
+
+cmd_log() {
+    docker run --rm -v claude-dockord_agent-logs:/logs alpine cat "/logs/${1:?Usage: claude-dockord log <filename>}"
+}
+
+cmd_export_logs() {
+    mkdir -p ./agent-logs-export
+    docker run --rm \
+        -v claude-dockord_agent-logs:/src \
+        -v "$(pwd)/agent-logs-export:/dst" \
+        alpine cp -r /src/. /dst/
+    ok "Logs exported to ./agent-logs-export/"
+}
+
+# ── Dispatch ──────────────────────────────────────────────────────
+case "${1:-}" in
+    setup)       cmd_setup ;;
+    run)         shift; cmd_run "$@" ;;
+    monitor)     cmd_monitor ;;
+    logs)        cmd_logs ;;
+    log)         shift; cmd_log "$@" ;;
+    export-logs) cmd_export_logs ;;
+    status)      docker compose ps ;;
+    attach)      docker exec -it claude-dockord tmux attach 2>/dev/null || echo "No tmux session." ;;
+    teardown)    docker compose down --rmi local ;;
+    nuke)        docker compose down -v --rmi local ;;
+    -h|--help|help|"") usage ;;
+    *)           echo "Unknown command: $1"; usage; exit 1 ;;
+esac

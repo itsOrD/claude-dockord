@@ -1,0 +1,7 @@
+.env
+.git
+agent-logs-export/
+*.log
+.DS_Store
+README.md
+LICENSE

@@ -1,0 +1,27 @@
+services:
+  claude:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: claude-dockord
+    stdin_open: true
+    tty: true
+    volumes:
+      - worktrees:/worktrees
+      - agent-logs:/agent-logs
+      - claude-config:/home/claude/.claude
+      - claude-history:/commandhistory
+    environment:
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+      - CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+    working_dir: /workspace
+    deploy:
+      resources:
+        limits:
+          memory: ${MEMORY_LIMIT:-16g}
+
+volumes:
+  claude-config:
+  claude-history:
+  worktrees:
+  agent-logs:

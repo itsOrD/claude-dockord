@@ -1,0 +1,19 @@
+# Progress Tracker
+
+State file for ralph loop iterations and agent handoffs.
+Update at the end of every work session.
+
+## Current Status
+- Phase: NOT STARTED
+- Last updated: —
+- Last agent: —
+
+## Completed
+
+## In Progress
+
+## Remaining
+
+## Blockers / Decisions Needed
+
+## Notes

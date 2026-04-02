@@ -1,0 +1,18 @@
+# .ralphrc — Ralph loop configuration
+# Container with --dangerously-skip-permissions. No tool restrictions.
+
+PROJECT_NAME="my-project"
+PROJECT_TYPE="auto"
+CLAUDE_CODE_CMD="claude"
+
+MAX_CALLS_PER_HOUR=80
+CLAUDE_TIMEOUT_MINUTES=15
+CLAUDE_OUTPUT_FORMAT="json"
+
+SESSION_CONTINUITY=true
+SESSION_EXPIRY_HOURS=24
+
+# Circuit breaker
+CB_NO_PROGRESS_THRESHOLD=4
+CB_SAME_ERROR_THRESHOLD=5
+CB_OUTPUT_DECLINE_THRESHOLD=70
